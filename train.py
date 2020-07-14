@@ -1,9 +1,12 @@
 import torch
 from torch.autograd.variable import Variable
-from torch import optim
-
-from data_loader import *
-from networks.vanilla import *
+from torch import optim, nn
+from GANs.data_loader import *
+from GANs.networks.vanilla import *
+from matplotlib import pyplot as plt
+from GANs.utils import Logger
+from IPython import display
+import random
 
 
 def real_data_target(size):
@@ -13,6 +16,7 @@ def real_data_target(size):
     data = Variable(torch.ones(size, 1))
     if torch.cuda.is_available(): return data.cuda()
     return data
+
 
 def fake_data_target(size):
     '''
@@ -61,29 +65,35 @@ def train_generator(optimizer, fake_data):
     return error
 
 
+def display_data(real_data, fake_data):
+    data = [real_data, fake_data]
+    r_index = random.sample(range(len(real_data)), 8)
+    c = 1
+
+    for r in r_index:
+        for d in [0,1]:
+            plt.subplot(4, 4, c)
+            plt.imshow(torch.reshape(data[d][r], [28,28]).detach().numpy())
+            plt.axis('off')
+            c = c+1
+    plt.show()
+
+
 def train(discriminator, generator):
-    # Optimizers
-    d_optimizer = optim.Adam(discriminator.parameters(), lr=0.0002)
-    g_optimizer = optim.Adam(generator.parameters(), lr=0.0002)
 
-    # Loss function
-    loss = nn.BCELoss()
-
-    # Number of steps to apply to the discriminator
-    d_steps = 1  # In Goodfellow et. al 2014 this variable is assigned to 1
-    # Number of epochs
-    num_epochs = 200
-
-    # logger = Logger(model_name='VGAN', data_name='MNIST')
+    logger = Logger(model_name='VGAN', data_name='MNIST')
 
     for epoch in range(num_epochs):
         for n_batch, (real_batch, _) in enumerate(data_loader):
 
             # 1. Train Discriminator
             real_data = Variable(images_to_vectors(real_batch))
+            print(len(real_data))
             if torch.cuda.is_available(): real_data = real_data.cuda()
             # Generate fake data
             fake_data = generator(noise(real_data.size(0))).detach()
+            print(len(fake_data))
+
             # Train D
             d_error, d_pred_real, d_pred_fake = train_discriminator(d_optimizer,
                                                                     real_data, fake_data)
@@ -107,17 +117,39 @@ def train(discriminator, generator):
                     epoch, num_epochs, n_batch, num_batches,
                     d_error, g_error, d_pred_real, d_pred_fake
                 )
+
+                display_data(real_data, fake_data)
+
             # Model Checkpoints
             logger.save_models(generator, discriminator, epoch)
 
 
 if __name__ == "__main__":
 
+    # Load data
+    data = mnist_data()
+    # Create loader with data, so that we can iterate over it
+    data_loader = torch.utils.data.DataLoader(data, batch_size=100, shuffle=True)
+    # Num batches
+    num_batches = len(data_loader)
+
     discriminator = DiscriminatorNet()
     generator = GeneratorNet()
     if torch.cuda.is_available():
         discriminator.cuda()
         generator.cuda()
+
+    # Optimizers
+    d_optimizer = optim.Adam(discriminator.parameters(), lr=0.0002)
+    g_optimizer = optim.Adam(generator.parameters(), lr=0.0002)
+
+    # Loss function
+    loss = nn.BCELoss()
+
+    # Number of steps to apply to the discriminator
+    d_steps = 1  # In Goodfellow et. al 2014 this variable is assigned to 1
+    # Number of epochs
+    num_epochs = 200
 
     num_test_samples = 16
     test_noise = noise(num_test_samples)

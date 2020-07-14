@@ -84,7 +84,7 @@ class GeneratorNet(torch.nn.Module):
         return x
 
 
-def noise(size):
+def noise(size):#verify the randomness of random
     n = Variable(torch.randn(size, 100))
     if torch.cuda.is_available(): return n.cuda()
     return n
